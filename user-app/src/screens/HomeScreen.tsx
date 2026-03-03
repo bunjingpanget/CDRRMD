@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../services/api';
 import { getWeatherVisualByCode } from '../utils/weatherVisual';
@@ -21,6 +22,7 @@ const FALLBACK =
   'https://api.open-meteo.com/v1/forecast?latitude=14.2117&longitude=121.1653&current=temperature_2m,weather_code&timezone=auto';
 
 export default function HomeScreen() {
+  const navigation = useNavigation();
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [news, setNews] = useState<AnnouncementItem[]>([]);
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
@@ -89,7 +91,11 @@ export default function HomeScreen() {
         </ImageBackground>
 
         {/* Request Rescue */}
-        <TouchableOpacity style={st.rescueBtn} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={st.rescueBtn}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Safe Zone' as never)}
+        >
           <View style={st.rescueIconBox}>
             <MaterialCommunityIcons name="ambulance" size={28} color="#444" />
           </View>
