@@ -5,11 +5,17 @@ export type SessionUser = {
   id: number;
   username: string;
   role: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  address?: string;
+  contactNumber?: string;
 };
 
 export type SessionData = {
   token: string;
   user: SessionUser;
+  appUserId?: string;
 };
 
 const SESSION_KEY = '@cddrmd:user_session';

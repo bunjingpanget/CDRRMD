@@ -8,9 +8,67 @@ import WeatherScreen from './src/screens/WeatherScreen';
 import RescueMapScreen from './src/screens/RescueMapScreen';
 import FamilyScreen from './src/screens/FamilyScreen';
 import MeScreen from './src/screens/MeScreen';
+import ReportFireScreen from './src/screens/ReportFireScreen';
+import ReportFloodScreen from './src/screens/ReportFloodScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import { clearSession, loadSession, saveSession, SessionData } from './src/services/session';
+import { AppProfile, ensureAccountForSession, patchAccountProfile } from './src/services/appAccount';
+import { getAuthMe, putAuthMe } from './src/services/api';
+
+function isBlank(value?: string | null) {
+  return !String(value ?? '').trim();
+}
+
+function hasAnyProfileValue(profile?: AppProfile | null) {
+  if (!profile) {
+    return false;
+  }
+
+  return Boolean(
+    profile.firstName.trim() ||
+    profile.lastName.trim() ||
+    profile.email.trim() ||
+    profile.address.trim() ||
+    profile.contactNumber.trim(),
+  );
+}
+
+async function syncMissingServerProfile(
+  sessionCandidate: SessionData,
+  localProfile: AppProfile,
+) {
+  const needsBackfill =
+    isBlank(sessionCandidate.user.firstName) ||
+    isBlank(sessionCandidate.user.lastName) ||
+    isBlank(sessionCandidate.user.address) ||
+    isBlank(sessionCandidate.user.contactNumber);
+
+  if (!needsBackfill || !hasAnyProfileValue(localProfile)) {
+    return sessionCandidate;
+  }
+
+  const response = await putAuthMe({
+    firstName: localProfile.firstName,
+    lastName: localProfile.lastName,
+    email: localProfile.email || sessionCandidate.user.email,
+    address: localProfile.address,
+    contactNumber: localProfile.contactNumber,
+  });
+
+  const serverUser = response.data?.user;
+  if (!serverUser?.id) {
+    return sessionCandidate;
+  }
+
+  return {
+    ...sessionCandidate,
+    user: {
+      ...sessionCandidate.user,
+      ...serverUser,
+    },
+  };
+}
 
 const Tab = createBottomTabNavigator();
 
@@ -30,7 +88,33 @@ export default function App() {
       }
 
       if (existing?.user?.role === 'user') {
-        setSession(existing);
+        let nextSession = existing;
+        try {
+          const meResponse = await getAuthMe();
+          const serverUser = meResponse.data?.user;
+          if (serverUser?.id) {
+            nextSession = {
+              ...existing,
+              user: {
+                ...existing.user,
+                ...serverUser,
+              },
+            };
+          }
+        } catch {
+          nextSession = existing;
+        }
+
+        let ensured = await ensureAccountForSession(nextSession);
+        try {
+          nextSession = await syncMissingServerProfile(ensured.session, ensured.account.profile);
+          ensured = await ensureAccountForSession(nextSession);
+        } catch {
+          ensured = await ensureAccountForSession(nextSession);
+        }
+
+        await saveSession(ensured.session);
+        setSession(ensured.session);
       } else {
         await clearSession();
       }
@@ -47,14 +131,42 @@ export default function App() {
     };
   }, []);
 
-  async function handleAuthenticated(nextSession: SessionData) {
+  async function handleAuthenticated(nextSession: SessionData, registrationProfile?: AppProfile) {
     if (nextSession.user.role !== 'user') {
       await clearSession();
       return;
     }
 
-    await saveSession(nextSession);
-    setSession(nextSession);
+    let hydratedSession = nextSession;
+    try {
+      const meResponse = await getAuthMe();
+      const serverUser = meResponse.data?.user;
+      if (serverUser?.id) {
+        hydratedSession = {
+          ...nextSession,
+          user: {
+            ...nextSession.user,
+            ...serverUser,
+          },
+        };
+      }
+    } catch {
+      hydratedSession = nextSession;
+    }
+
+    let ensured = await ensureAccountForSession(hydratedSession);
+    try {
+      hydratedSession = await syncMissingServerProfile(ensured.session, ensured.account.profile);
+      ensured = await ensureAccountForSession(hydratedSession);
+    } catch {
+      ensured = await ensureAccountForSession(hydratedSession);
+    }
+
+    if (registrationProfile) {
+      await patchAccountProfile(ensured.account.appUserId, registrationProfile);
+    }
+    await saveSession(ensured.session);
+    setSession(ensured.session);
   }
 
   async function handleLogout() {
@@ -110,6 +222,8 @@ export default function App() {
               'Safe Zone': 'shield-check',
               Family: 'account-group',
               Me: 'account-circle',
+              'Report Fire': 'fire',
+              'Report Flood': 'home-flood',
             };
             return <MaterialCommunityIcons name={icons[route.name] ?? 'circle'} size={22} color={color} />;
           },
@@ -119,10 +233,32 @@ export default function App() {
         <Tab.Screen name="Home" component={HomeScreen} />
         <Tab.Screen name="Weather" component={WeatherScreen} />
         <Tab.Screen name="Safe Zone" component={RescueMapScreen} />
-        <Tab.Screen name="Family" component={FamilyScreen} />
-        <Tab.Screen name="Me">
-          {() => <MeScreen onLogout={handleLogout} />}
+        <Tab.Screen name="Family">
+          {() => <FamilyScreen appUserId={session.appUserId ?? ''} />}
         </Tab.Screen>
+        <Tab.Screen name="Me">
+          {() => <MeScreen appUserId={session.appUserId ?? ''} onLogout={handleLogout} />}
+        </Tab.Screen>
+        <Tab.Screen
+          name="Report Fire"
+          component={ReportFireScreen}
+          options={{
+            tabBarButton: () => null,
+            tabBarItemStyle: { display: 'none' },
+            tabBarLabel: () => null,
+            tabBarStyle: { display: 'none' },
+          }}
+        />
+        <Tab.Screen
+          name="Report Flood"
+          component={ReportFloodScreen}
+          options={{
+            tabBarButton: () => null,
+            tabBarItemStyle: { display: 'none' },
+            tabBarLabel: () => null,
+            tabBarStyle: { display: 'none' },
+          }}
+        />
       </Tab.Navigator>
     </NavigationContainer>
   );

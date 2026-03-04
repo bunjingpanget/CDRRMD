@@ -1,16 +1,21 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { AppAccount, getFamilyAccounts, inviteFamilyById } from '../services/appAccount';
 
 type FamilyStatus = 'Safe' | 'No Response';
 
 type FamilyMember = {
-  id: number;
+  id: string;
   firstName: string;
   lastName: string;
-  relation: string;
   status: FamilyStatus;
   updatedAt: string;
+};
+
+type Props = {
+  appUserId: string;
 };
 
 function fmtTime(date = new Date()) {
@@ -20,13 +25,37 @@ function fmtTime(date = new Date()) {
   return `${m} ${d}, ${t}`;
 }
 
-export default function FamilyScreen() {
+export default function FamilyScreen({ appUserId }: Props) {
   const [myStatus, setMyStatus] = useState<FamilyStatus>('Safe');
-  const [members, setMembers] = useState<FamilyMember[]>([
-    { id: 1, firstName: 'Maria', lastName: 'Dela Cruz', relation: 'Mother', status: 'Safe', updatedAt: fmtTime() },
-    { id: 2, firstName: 'Juan', lastName: 'Dela Cruz', relation: 'Father', status: 'No Response', updatedAt: fmtTime() },
-    { id: 3, firstName: 'Lina', lastName: 'Dela Cruz', relation: 'Sister', status: 'No Response', updatedAt: fmtTime() },
-  ]);
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [inviteId, setInviteId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const mapMembers = useCallback((accounts: AppAccount[]): FamilyMember[] => {
+    return accounts.map((account) => ({
+      id: account.appUserId,
+      firstName: account.profile.firstName,
+      lastName: account.profile.lastName,
+      status: 'No Response',
+      updatedAt: fmtTime(),
+    }));
+  }, []);
+
+  const reloadMembers = useCallback(async () => {
+    if (!appUserId) {
+      setMembers([]);
+      return;
+    }
+
+    const family = await getFamilyAccounts(appUserId);
+    setMembers(mapMembers(family));
+  }, [appUserId, mapMembers]);
+
+  useFocusEffect(
+    useCallback(() => {
+      reloadMembers().catch(() => {});
+    }, [reloadMembers]),
+  );
 
   const counts = useMemo(() => {
     const safe = members.filter((m) => m.status === 'Safe').length + (myStatus === 'Safe' ? 1 : 0);
@@ -34,11 +63,35 @@ export default function FamilyScreen() {
     return { safe, nr };
   }, [members, myStatus]);
 
-  function addMember() {
-    setMembers((prev) => [
-      { id: Date.now(), firstName: 'New', lastName: 'Member', relation: 'Family', status: 'No Response', updatedAt: fmtTime() },
-      ...prev,
-    ]);
+  async function addMember() {
+    if (!inviteId.trim()) {
+      setError('Enter a Family ID to invite.');
+      return;
+    }
+
+    const result = await inviteFamilyById(appUserId, inviteId.trim());
+
+    if (!result.ok) {
+      if (result.reason === 'not-found') {
+        setError('Family account ID not found in this app.');
+        return;
+      }
+      if (result.reason === 'self') {
+        setError('You cannot invite your own ID.');
+        return;
+      }
+      setError('Family member already invited.');
+      return;
+    }
+
+    setError(null);
+    setInviteId('');
+    await reloadMembers();
+  }
+
+  function fullName(firstName: string, lastName: string) {
+    const name = `${firstName} ${lastName}`.trim();
+    return name || 'No name set';
   }
 
   return (
@@ -48,7 +101,7 @@ export default function FamilyScreen() {
         <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
         <Text style={st.headerTitle}>Family Status</Text>
         <TouchableOpacity onPress={addMember} style={st.addBtn}>
-          <MaterialCommunityIcons name="home-variant" size={18} color="#fff" />
+          <MaterialCommunityIcons name="account-plus-outline" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -91,6 +144,25 @@ export default function FamilyScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={st.card}>
+          <Text style={st.yourStatusLabel}>Invite family by account ID</Text>
+          <View style={st.inviteRow}>
+            <MaterialCommunityIcons name="card-account-details-outline" size={18} color="#64748b" />
+            <TextInput
+              style={st.inviteInput}
+              value={inviteId}
+              onChangeText={setInviteId}
+              placeholder="Enter Family ID"
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="characters"
+            />
+          </View>
+          {error ? <Text style={st.errorText}>{error}</Text> : null}
+          <TouchableOpacity style={st.inviteBtn} onPress={addMember}>
+            <Text style={st.inviteBtnText}>Invite Member</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Members */}
         {members.map((m) => (
           <View key={m.id} style={st.card}>
@@ -99,8 +171,8 @@ export default function FamilyScreen() {
                 <MaterialCommunityIcons name="account-outline" size={20} color="#64748b" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={st.memberName}>{m.firstName} {m.lastName}</Text>
-                <Text style={st.memberRelation}>{m.relation}</Text>
+                <Text style={st.memberName}>{fullName(m.firstName, m.lastName)}</Text>
+                <Text style={st.memberRelation}>Account ID: {m.id}</Text>
               </View>
               <View style={[st.badge, { backgroundColor: m.status === 'Safe' ? '#dcfce7' : '#fef3c7' }]}>
                 <MaterialCommunityIcons
@@ -119,6 +191,12 @@ export default function FamilyScreen() {
             </View>
           </View>
         ))}
+
+        {members.length === 0 ? (
+          <View style={st.card}>
+            <Text style={st.memberMeta}>No family members invited yet.</Text>
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -154,6 +232,27 @@ const st = StyleSheet.create({
 
   markBtn: { borderRadius: 12, paddingVertical: 10, alignItems: 'center', marginTop: 10 },
   markBtnText: { fontSize: 14, fontWeight: '700' },
+
+  inviteRow: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inviteInput: { flex: 1, marginLeft: 8, color: '#0f2948', fontSize: 14 },
+  inviteBtn: {
+    backgroundColor: '#1f678f',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  inviteBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  errorText: { color: '#dc2626', fontSize: 12, marginTop: 8 },
 
   memberRow: { flexDirection: 'row', alignItems: 'flex-start' },
   memberIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginRight: 8 },

@@ -143,3 +143,45 @@ export async function postAuth(path: '/auth/login' | '/auth/register', payload: 
     return response;
   }
 }
+
+export async function getAuthMe() {
+  const host = await getHealthyHost();
+
+  try {
+    const response = await api.get('/auth/me');
+    setApiHost(host);
+    return response;
+  } catch (error) {
+    if (!isConnectivityError(error)) {
+      throw error;
+    }
+
+    const nextHost = await resolveHealthyHost();
+    setApiHost(nextHost);
+    return api.get('/auth/me');
+  }
+}
+
+export async function putAuthMe(payload: {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  address?: string;
+  contactNumber?: string;
+}) {
+  const host = await getHealthyHost();
+
+  try {
+    const response = await api.put('/auth/me', payload);
+    setApiHost(host);
+    return response;
+  } catch (error) {
+    if (!isConnectivityError(error)) {
+      throw error;
+    }
+
+    const nextHost = await resolveHealthyHost();
+    setApiHost(nextHost);
+    return api.put('/auth/me', payload);
+  }
+}

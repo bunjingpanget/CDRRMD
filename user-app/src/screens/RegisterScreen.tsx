@@ -16,9 +16,10 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { postAuth } from '../services/api';
 import { SessionData } from '../services/session';
+import { AppProfile } from '../services/appAccount';
 
 type Props = {
-  onRegisterSuccess: (session: SessionData) => Promise<void>;
+  onRegisterSuccess: (session: SessionData, profile?: AppProfile) => Promise<void>;
   onShowLogin: () => void;
 };
 
@@ -61,7 +62,13 @@ export default function RegisterScreen({ onRegisterSuccess, onShowLogin }: Props
         return;
       }
 
-      await onRegisterSuccess(session);
+      await onRegisterSuccess(session, {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        address: address.trim(),
+        contactNumber: contactNumber.trim(),
+      });
     } catch (err: any) {
       if (err?.code === 'ECONNABORTED' || err?.message?.toLowerCase?.().includes('network')) {
         setError('Cannot reach server. Make sure backend is running and phone is on same Wi-Fi.');

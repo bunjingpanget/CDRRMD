@@ -40,14 +40,20 @@ export default function HomeScreen() {
     try { const r = await fetch(FALLBACK); setWeather(await r.json()); } catch { setWeather(null); }
   }, []);
 
-  useEffect(() => { load().catch(() => {}); }, [load]);
+  useEffect(() => {
+    load().catch(() => {});
+  }, [load]);
 
   const visual = useMemo(
     () => getWeatherVisualByCode(weather?.current?.weather_code),
     [weather?.current?.weather_code],
   );
 
-  const onRefresh = async () => { setRefreshing(true); await load().catch(() => {}); setRefreshing(false); };
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load().catch(() => {});
+    setRefreshing(false);
+  };
 
   return (
     <View style={st.root}>
@@ -74,21 +80,23 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Weather Card */}
-        <ImageBackground
-          source={{ uri: visual.backgroundUri }}
-          resizeMode="cover"
-          style={st.weatherCard}
-          imageStyle={{ borderRadius: 14 }}
-        >
-          <View style={st.weatherOverlay}>
-            <Text style={st.weatherLocation}>
-              <MaterialCommunityIcons name="map-marker" size={14} color="#fff" /> Sampiruhan, Calamba City
-            </Text>
-            <Text style={st.weatherCondition}>
-              {visual.condition} • {weather?.current?.temperature_2m ?? '--'}°C
-            </Text>
-          </View>
-        </ImageBackground>
+        <TouchableOpacity activeOpacity={0.88} onPress={() => navigation.navigate('Weather' as never)}>
+          <ImageBackground
+            source={{ uri: visual.backgroundUri }}
+            resizeMode="cover"
+            style={st.weatherCard}
+            imageStyle={{ borderRadius: 14 }}
+          >
+            <View style={st.weatherOverlay}>
+              <Text style={st.weatherLocation}>
+                <MaterialCommunityIcons name="map-marker" size={14} color="#fff" /> Calamba City
+              </Text>
+              <Text style={st.weatherCondition}>
+                {visual.condition} • {weather?.current?.temperature_2m ?? '--'}°C (Calamba City)
+              </Text>
+            </View>
+          </ImageBackground>
+        </TouchableOpacity>
 
         {/* Request Rescue */}
         <TouchableOpacity
@@ -108,13 +116,21 @@ export default function HomeScreen() {
 
         {/* Report Row */}
         <View style={st.reportRow}>
-          <TouchableOpacity style={[st.reportCard, { backgroundColor: '#c0392b' }]} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={[st.reportCard, { backgroundColor: '#c0392b' }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Report Fire' as never)}
+          >
             <View style={st.reportIconCircle}>
               <MaterialCommunityIcons name="fire" size={28} color="#fff" />
             </View>
             <Text style={st.reportLabel}>Report Fire</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[st.reportCard, { backgroundColor: '#2980b9' }]} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={[st.reportCard, { backgroundColor: '#2980b9' }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Report Flood' as never)}
+          >
             <View style={st.reportIconCircle}>
               <MaterialCommunityIcons name="home-flood" size={26} color="#fff" />
             </View>

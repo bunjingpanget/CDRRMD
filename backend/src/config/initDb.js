@@ -7,6 +7,10 @@ async function initDb() {
       id SERIAL PRIMARY KEY,
       username VARCHAR(80) NOT NULL,
       email VARCHAR(160),
+      first_name VARCHAR(120),
+      last_name VARCHAR(120),
+      address TEXT,
+      contact_number VARCHAR(40),
       password_hash TEXT NOT NULL,
       role VARCHAR(20) NOT NULL DEFAULT 'admin',
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -34,6 +38,18 @@ async function initDb() {
   await pool.query(`
     ALTER TABLE users
     ADD COLUMN IF NOT EXISTS email VARCHAR(160);
+
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS first_name VARCHAR(120);
+
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS last_name VARCHAR(120);
+
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS address TEXT;
+
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS contact_number VARCHAR(40);
 
     ALTER TABLE users
     DROP CONSTRAINT IF EXISTS users_username_key;
